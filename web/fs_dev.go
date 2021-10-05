@@ -11,5 +11,5 @@ import (
 func getFrontendAssets() fs.FS {
 	log.Println("Serving web assets from public/")
 
-	return os.DirFS("../../web/public")
+	return os.DirFS("../../web/frontend/public")
 }

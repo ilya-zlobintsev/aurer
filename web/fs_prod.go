@@ -8,13 +8,13 @@ import (
 	"log"
 )
 
-//go:embed public
+//go:embed frontend/public
 var embedFrontend embed.FS
 
 func getFrontendAssets() fs.FS {
 	log.Println("Serving embedded web assets")
 
-	f, err := fs.Sub(embedFrontend, "public")
+	f, err := fs.Sub(embedFrontend, "frontend/public")
 	if err != nil {
 		panic(err)
 	}
