@@ -15,7 +15,7 @@ type Worker struct {
 	Package     string
 }
 
-func (c *Controller) runWorker(w Worker) error {
+func (c *Controller) RunWorker(w Worker) error {
 	log.Printf("Running worker %v", w.ContainerId)
 
 	ctx := context.Background()
