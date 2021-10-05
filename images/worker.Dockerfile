@@ -8,18 +8,17 @@ RUN useradd -m build
 
 RUN echo "build ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
+
+COPY build.sh /usr/local/bin/build.sh
+
 RUN mkdir /output
 
 RUN mkdir /work
 
-RUN chown build:build /work /output
-
 ENV PKGDEST /output
-
-USER build
 
 WORKDIR /work
 
-COPY build.sh /usr/local/bin/build.sh
+USER build
 
 CMD build.sh
