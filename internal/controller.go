@@ -55,6 +55,9 @@ func (c *Controller) CreateWorker(pkgname string, outdir string) (Worker, error)
 			Env: []string{"PACKAGE=" + pkgname},
 		},
 		&container.HostConfig{
+			Tmpfs: map[string]string{
+				"/work": "rw,exec,nosuid,nodev",
+			},
 			Mounts: []mount.Mount{
 				{
 					Type:   mount.TypeBind,
@@ -70,13 +73,6 @@ func (c *Controller) CreateWorker(pkgname string, outdir string) (Worker, error)
 					Type:   mount.TypeBind,
 					Source: outdir,
 					Target: "/output",
-				},
-				{
-					Type:   mount.TypeTmpfs,
-					Target: "/work",
-					TmpfsOptions: &mount.TmpfsOptions{
-						Mode: 1777,
-					},
 				},
 			},
 		},
