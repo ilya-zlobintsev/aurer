@@ -3,7 +3,10 @@ package repo
 import (
 	"archive/tar"
 	"io"
+	"log"
 	"os"
+	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -13,7 +16,10 @@ type PkgInfo struct {
 	Base        string
 	Version     string
 	Description string
+	BuildDate   int
 }
+
+const REPO_DB_FILE = "aurer.db.tar"
 
 func parsePkgInfo(info string) PkgInfo {
 	lines := strings.Split(info, "\n")
@@ -54,6 +60,8 @@ func parsePkgInfo(info string) PkgInfo {
 				pkgInfo.Version = value
 			case "DESC":
 				pkgInfo.Description = value
+			case "BUILDDATE":
+				pkgInfo.BuildDate, _ = strconv.Atoi(value)
 			}
 		}
 	}
@@ -64,7 +72,7 @@ func parsePkgInfo(info string) PkgInfo {
 func ReadRepo(path string) ([]PkgInfo, error) {
 	var packages []PkgInfo
 
-	file, err := os.Open(path + "/aurer.db")
+	file, err := os.Open(path + "/" + REPO_DB_FILE)
 
 	if err != nil {
 		return packages, err
@@ -99,4 +107,40 @@ func ReadRepo(path string) ([]PkgInfo, error) {
 	}
 
 	return packages, nil
+}
+
+func DeletePackage(repoPath string, pkgName string) error {
+	log.Printf("Removing package %v\n", pkgName)
+
+	repo, err := ReadRepo(repoPath)
+
+	if err != nil {
+		return err
+	}
+
+	for _, pkg := range repo {
+		if pkg.Name == pkgName {
+			cmd := exec.Command("repo-remove", repoPath+"/"+REPO_DB_FILE, pkgName)
+
+			output, err := cmd.CombinedOutput()
+
+			log.Println(string(output))
+
+			if err != nil {
+				return err
+			}
+
+			err = os.Remove(repoPath + "/" + pkg.Filename)
+
+			if err != nil {
+				return err
+			}
+
+			log.Printf("Removed package %v", pkgName)
+
+			return nil
+		}
+	}
+
+	return nil
 }

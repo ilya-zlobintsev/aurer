@@ -29,8 +29,11 @@ func (web *Web) Run() {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/api/workers", web.getWorkers)
+	r.HandleFunc("/api/status", web.getStatus)
 	r.HandleFunc("/api/packages", web.getPackages).Methods("GET")
 	r.HandleFunc("/api/packages", web.postPackage).Methods("POST")
+	r.HandleFunc("/api/packages", web.deletePackage).Methods("DELETE")
+	r.HandleFunc("/api/update", web.startUpdate).Methods("POST")
 
 	repoServer := http.FileServer(http.Dir(web.c.RepoDir))
 

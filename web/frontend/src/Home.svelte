@@ -3,17 +3,44 @@
 
     let workers = [];
     let packages = [];
+    let addingPackage = false;
+    let serverStatus = "";
+
+    async function addPackage() {
+        const pkg = prompt("Enter AUR package name");
+
+        if (pkg != "") {
+            addingPackage = true;
+
+            const response = await fetch("/api/packages", {
+                method: "POST",
+                body: pkg,
+            });
+
+            if (!response.ok) {
+                alert("Failed to add package: " + response.statusText);
+            }
+
+            addingPackage = false;
+        }
+    }
 
     async function getWorkers() {
         const res = await fetch("/api/workers");
 
         if (res.ok) {
-            workers = await res.json();
+            const workersNew = await res.json();
+
+            if (workersNew.toString() != workers.toString()) {
+                workers = workersNew;
+
+                getPackages();
+            }
         } else {
             throw new Error(res.status);
         }
     }
-    
+
     async function getPackages() {
         const res = await fetch("/api/packages");
 
@@ -23,17 +50,58 @@
             throw new Error(res.status);
         }
     }
-    
-    getPackages();
 
+    async function getStatus() {
+        const res = await fetch("/api/status");
+
+        if (res.ok) {
+            let statusList = await res.json();
+
+            if (statusList.length == 0) {
+                serverStatus = "Idle";
+            } else {
+                serverStatus = statusList.join(", ");
+            }
+        } else {
+            throw new Error(res.status);
+        }
+    }
+
+    async function startUpdate() {
+        await fetch("/api/update", {
+            method: "POST",
+        });
+    }
+
+    async function deletePackage(pkgName) {
+        if (confirm("Are you sure you want to delete " + pkgName + "?")) {
+            await fetch("/api/packages", {
+                method: "DELETE",
+                body: pkgName,
+            });
+
+            getPackages();
+        }
+    }
+
+    getPackages();
     getWorkers();
+    getStatus();
+
     setInterval(getWorkers, 2000);
+    setInterval(getStatus, 1000);
 
     let repoLink =
         window.location.protocol + "//" + window.location.host + "/repo";
 </script>
 
 <div>
+    <div class="section">
+        <h1>Status: <b>{serverStatus}</b></h1>
+    </div>
+    <div class="section">
+        <button on:click={startUpdate}>Check for updates</button>
+    </div>
     <div id="top-section">
         <div class="section">
             <h2>Repository</h2>
@@ -46,21 +114,35 @@
         </div>
         <div class="section">
             <h2>Packages</h2>
-            
+
             <table>
                 <tr>
                     <th>Name</th>
                     <th>Version</th>
                     <th>Download</th>
+                    <th>Delete</th>
                 </tr>
                 {#each packages as Package}
                     <tr>
                         <td>{Package.Name}</td>
                         <td>{Package.Version}</td>
                         <td><a href="/repo/{Package.Filename}">Link</a></td>
+                        <td
+                            ><button
+                                on:click={() => deletePackage(Package.Name)}
+                                >Delete</button
+                            ></td
+                        >
                     </tr>
                 {/each}
             </table>
+            {#if addingPackage}
+                <p>Adding package...</p>
+            {:else}
+                <button id="addPackageButton" on:click={addPackage}>
+                    Add package
+                </button>
+            {/if}
         </div>
     </div>
     <div class="section">
@@ -119,20 +201,22 @@
         margin: 10px;
         padding: 15px;
     }
-    
-    .section table, th, td {
+
+    .section table,
+    th,
+    td {
         border: 1px solid black;
         border-collapse: collapse;
     }
     .section table {
         width: 100%;
     }
-    
-    .section th, td {
+
+    .section th,
+    td {
         text-align: center;
         padding: 5px;
     }
-    
 
     .workers a {
         color: black;

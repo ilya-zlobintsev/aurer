@@ -18,6 +18,22 @@ func respondJson(w http.ResponseWriter, j interface{}) {
 	}
 }
 
+func handleErr(w http.ResponseWriter, err error) {
+	w.WriteHeader(500)
+	fmt.Fprint(w, err)
+}
+
+func bodyStr(w http.ResponseWriter, r *http.Request) (string, error) {
+
+	b, err := ioutil.ReadAll(r.Body)
+
+	if err != nil {
+		return "", err
+	}
+
+	return string(b), nil
+}
+
 func (web *Web) getWorkers(w http.ResponseWriter, r *http.Request) {
 	workers := web.c.GetWorkers()
 
@@ -27,10 +43,8 @@ func (web *Web) getWorkers(w http.ResponseWriter, r *http.Request) {
 func (web *Web) getPackages(w http.ResponseWriter, r *http.Request) {
 	packages, err := repo.ReadRepo(web.c.RepoDir)
 
-	if err != nil {
-		w.WriteHeader(500)
-
-		fmt.Fprintf(w, "%v", err)
+	if len(packages) == 0 || err != nil {
+		respondJson(w, make([]repo.PkgInfo, 0))
 
 		return
 	}
@@ -38,18 +52,18 @@ func (web *Web) getPackages(w http.ResponseWriter, r *http.Request) {
 	respondJson(w, packages)
 }
 
+func (web *Web) getStatus(w http.ResponseWriter, r *http.Request) {
+	respondJson(w, web.c.GetStatus())
+}
+
 func (web *Web) postPackage(w http.ResponseWriter, r *http.Request) {
-	b, err := ioutil.ReadAll(r.Body)
+	pkgname, err := bodyStr(w, r)
 
 	if err != nil {
-		w.WriteHeader(500)
-
-		log.Printf("Failed reading request body: %v", b)
+		handleErr(w, err)
 
 		return
 	}
-
-	pkgname := string(b)
 
 	go func() {
 		err := web.c.BuildPackage(pkgname)
@@ -58,4 +72,29 @@ func (web *Web) postPackage(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Error building package %v: %v", pkgname, err)
 		}
 	}()
+}
+
+func (web *Web) startUpdate(w http.ResponseWriter, r *http.Request) {
+	err := web.c.Update()
+
+	if err != nil {
+		handleErr(w, err)
+	}
+}
+
+func (web *Web) deletePackage(w http.ResponseWriter, r *http.Request) {
+	pkgName, err := bodyStr(w, r)
+
+	if err != nil {
+		handleErr(w, err)
+
+		return
+	}
+
+	err = repo.DeletePackage(web.c.RepoDir, pkgName)
+
+	if err != nil {
+		handleErr(w, err)
+
+	}
 }

@@ -19,7 +19,7 @@ func main() {
 
 	go c.ListenToSignals()
 
-	// go internal.StartServices(&c)
+	internal.StartServices(&c)
 
 	web.Run()
 }

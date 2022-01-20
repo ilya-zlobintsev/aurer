@@ -1,24 +1,17 @@
 FROM docker.io/archlinux
 
-RUN echo "NoProgressBar" >> /etc/pacman.conf
+RUN pacman -Syu base-devel git --noprogressbar --noconfirm --needed
 
-RUN pacman -Syu base-devel git --noconfirm --needed
+RUN echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
-RUN useradd -m build
+COPY images/scripts/* /usr/local/bin/
 
-RUN echo "build ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-
-
-COPY build.sh /usr/local/bin/build.sh
-
-RUN mkdir /output
+RUN mkdir /repo
 
 RUN mkdir /work
 
-ENV PKGDEST /output
+ENV PKGDEST /repo
 
 WORKDIR /work
 
-USER build
-
-CMD build.sh
+CMD setup.sh

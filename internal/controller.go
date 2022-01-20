@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -11,8 +12,10 @@ import (
 	"time"
 
 	"github.com/Jguer/aur"
+	"github.com/Jguer/go-alpm/v2"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 	"github.com/ilyazzz/aurer/internal/repo"
@@ -23,23 +26,80 @@ type Controller struct {
 	workers   []Worker
 	aurClient *aur.Client
 	RepoDir   string
+	status    []string
+}
+
+func isDocker() bool {
+	_, err := os.Stat("/.dockerenv")
+
+	if err != nil {
+		_, err = os.Stat("/run/.containerenv") // For Podman
+
+		return err == nil
+	} else {
+		return true
+	}
 }
 
 func CreateController(docker *client.Client) Controller {
-	workers := make([]Worker, 0)
-
 	aurClient, err := aur.NewClient()
 
 	if err != nil {
 		panic(err)
 	}
 
+	var repoDir string
+
+	if isDocker() {
+		repoDir = "/repo"
+	} else {
+		repoDir = os.Getenv("AURER_REPO_DIR")
+
+		if repoDir == "" {
+			log.Println("Not running in Docker and AURER_REPO_DIR is not set! Aborting.")
+			os.Exit(1)
+		}
+	}
+
+	log.Printf("Serving repo from %v", repoDir)
+
 	return Controller{
 		docker:    docker,
-		workers:   workers,
+		workers:   make([]Worker, 0),
 		aurClient: aurClient,
-		RepoDir:   "/tmp/out",
+		RepoDir:   repoDir,
+		status:    make([]string, 0),
 	}
+}
+
+func (c *Controller) addStatus(status string) {
+	// TODO send the status change event over a channel
+	c.status = append(c.status, status)
+}
+
+func (c *Controller) removeStatus(status string) {
+	for i, w := range c.status {
+		if w == status {
+			c.status[i] = c.status[len(c.status)-1]
+
+			c.status = c.status[:len(c.status)-1]
+		}
+	}
+}
+
+func (c *Controller) GetStatus() []string {
+	return c.status
+}
+
+func (c *Controller) getWorkerImage() string {
+
+	image := os.Getenv("AURER_WORKER_IMAGE")
+
+	if image == "" {
+		image = "docker.io/ilyazzz/aurer-worker"
+	}
+
+	return image
 }
 
 func (c *Controller) CreateWorker(pkgname string, outdir string) (Worker, error) {
@@ -48,7 +108,7 @@ func (c *Controller) CreateWorker(pkgname string, outdir string) (Worker, error)
 	container, err := c.docker.ContainerCreate(
 		ctx,
 		&container.Config{
-			Image: "docker.io/ilyazzz/aur-cd-worker",
+			Image: c.getWorkerImage(),
 			Labels: map[string]string{
 				"aurer.worker": "1",
 			},
@@ -72,7 +132,7 @@ func (c *Controller) CreateWorker(pkgname string, outdir string) (Worker, error)
 				{
 					Type:   mount.TypeBind,
 					Source: outdir,
-					Target: "/output",
+					Target: "/repo",
 				},
 			},
 		},
@@ -122,7 +182,10 @@ func (c *Controller) GetWorkers() []Worker {
 }
 
 func (c *Controller) BuildPackage(pkgname string, force ...bool) error {
-	ctx := context.Background()
+	status := fmt.Sprintf("Building %v", pkgname)
+
+	c.addStatus(status)
+	defer c.removeStatus(status)
 
 	for _, worker := range c.workers {
 		if worker.Package == pkgname {
@@ -130,37 +193,11 @@ func (c *Controller) BuildPackage(pkgname string, force ...bool) error {
 		}
 	}
 
-	pkgInfo, err := c.aurClient.Info(ctx, []string{pkgname})
+	outdir := c.getRepoPath()
 
-	if err != nil {
-		return err
-	}
+	log.Printf("Using %v as output folder", outdir)
 
-	if len(pkgInfo) == 0 {
-		return errors.New("package not found")
-	}
-
-	if !(len(force) > 0 && force[0]) {
-
-		db, err := repo.ReadRepo(c.RepoDir)
-
-		if err != nil {
-			log.Print("Unable to read package database")
-		} else {
-			for _, pkg := range db {
-				if pkg.Name == pkgname {
-					if pkg.Version == pkgInfo[0].Version {
-						log.Printf("Package %v already exists and is up-to-date, not building", pkgname)
-
-						return nil
-					}
-				}
-			}
-		}
-
-	}
-
-	worker, err := c.CreateWorker(pkgname, c.RepoDir)
+	worker, err := c.CreateWorker(pkgname, outdir)
 
 	if err != nil {
 		return err
@@ -213,4 +250,99 @@ func (c *Controller) ListenToSignals() {
 	wg.Wait()
 
 	os.Exit(0)
+}
+
+func (c *Controller) Update() error {
+	status := "Updating packages"
+
+	c.addStatus(status)
+	defer c.removeStatus(status)
+
+	ctx := context.Background()
+
+	db, err := repo.ReadRepo(c.RepoDir)
+
+	if err != nil {
+		return err
+	}
+
+	pkgs := make(map[string]string) // Package name and version
+	var pkgNames []string
+
+	for _, pkg := range db {
+		pkgs[pkg.Name] = pkg.Version
+		pkgNames = append(pkgNames, pkg.Name)
+	}
+
+	info, err := c.aurClient.Info(ctx, pkgNames)
+
+	if err != nil {
+		return err
+	}
+
+	var wg sync.WaitGroup
+
+	for _, pkgInfo := range info {
+		oldVer := pkgs[pkgInfo.Name]
+		newVer := pkgInfo.Version
+
+		if alpm.VerCmp(newVer, oldVer) > 0 {
+
+			log.Printf("Detected package update for %v: (%v -> %v)", pkgInfo.Name, oldVer, newVer)
+			wg.Add(1)
+			go func(name string) {
+				defer wg.Done()
+
+				c.BuildPackage(name)
+			}(pkgInfo.Name)
+		}
+
+	}
+
+	wg.Wait()
+
+	return nil
+}
+
+func (c *Controller) getRepoPath() string {
+	if isDocker() {
+		path := c.getMountHostPath("/repo")
+
+		if path == "" {
+			log.Printf("Running in Docker and /repo is not mounted! Cannot proceed.")
+			os.Exit(1)
+
+			return ""
+		} else {
+			return path
+		}
+	} else {
+		return c.RepoDir
+	}
+}
+
+func (c *Controller) getMountHostPath(dest string) string {
+	listFilters := filters.NewArgs(filters.Arg("label", "aurer.server=1"))
+
+	containers, err := c.docker.ContainerList(context.Background(), types.ContainerListOptions{
+		Filters: listFilters,
+	})
+
+	if err != nil {
+		log.Panicf("Failed to list containers! %v", err)
+	}
+
+	if len(containers) == 0 {
+		log.Panicf("Running in Docker and the server container cannot be found!")
+	}
+
+	container := containers[0]
+
+	for _, mount := range container.Mounts {
+		if mount.Destination == dest {
+			return mount.Source
+		}
+	}
+
+	return ""
 }
