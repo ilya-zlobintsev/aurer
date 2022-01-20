@@ -4,6 +4,12 @@ RUN pacman -Syu base-devel git --noprogressbar --noconfirm --needed
 
 RUN echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
+RUN echo -e '\
+[aurer]\n\
+Server = file:///repo\n\
+SigLevel = Optional TrustAll'\
+>> /etc/pacman.conf
+
 COPY images/scripts/* /usr/local/bin/
 
 RUN mkdir /repo
