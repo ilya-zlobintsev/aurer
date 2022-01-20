@@ -21,7 +21,7 @@ jobs:
     - name: Build server image
       run: make server-image
     - name: Push server image
-      run: docker push ghcr.io/${{ github.repository_owner }}/aurer-server
+      run: docker push ghcr.io/${{ github.repository_owner }}/aurer
     - name: Build worker image
       run: make worker-image
     - name: Push worker image
