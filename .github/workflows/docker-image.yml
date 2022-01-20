@@ -1,0 +1,29 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v1
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_REGISTRY_TOKEN }}
+    - name: Build server image
+      run: make server-image
+    - name: Push server image
+      run: docker push ghcr.io/${{ github.repository_owner }}/aurer-server
+    - name: Build worker image
+      run: make worker-image
+    - name: Push worker image
+      run: docker push ghcr.io/${{ github.repository_owner }}/aurer-worker
+
