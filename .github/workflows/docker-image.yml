@@ -17,7 +17,7 @@ jobs:
       with:
         registry: ghcr.io
         username: ${{ github.repository_owner }}
-        password: ${{ secrets.GITHUB_REGISTRY_TOKEN }}
+        password: ${{ secrets.GHCR_TOKEN }}
     - name: Build server image
       run: make server-image
     - name: Push server image
