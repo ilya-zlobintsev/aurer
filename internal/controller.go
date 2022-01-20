@@ -91,12 +91,14 @@ func (c *Controller) GetStatus() []string {
 	return c.status
 }
 
+const DEFAULT_WORKER_IMAGE = "ghcr.io/ilyazzz/aurer-worker"
+
 func (c *Controller) getWorkerImage() string {
 
 	image := os.Getenv("AURER_WORKER_IMAGE")
 
 	if image == "" {
-		image = "docker.io/ilyazzz/aurer-worker"
+		image = DEFAULT_WORKER_IMAGE
 	}
 
 	return image
