@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"io"
 	"log"
 	"os"
 	"time"
@@ -41,11 +42,15 @@ func (c *Controller) pullWorkerImage() {
 
 	log.Println("Pulling worker image")
 
-	_, err := c.docker.ImagePull(ctx, c.getWorkerImage(), types.ImagePullOptions{})
+	reader, err := c.docker.ImagePull(ctx, c.getWorkerImage(), types.ImagePullOptions{})
 
 	if err != nil {
 		log.Panicf("Error pulling worker image! %v", err)
 	}
+
+	defer reader.Close()
+
+	io.Copy(os.Stderr, reader)
 
 	log.Println("Worker image updated")
 }
