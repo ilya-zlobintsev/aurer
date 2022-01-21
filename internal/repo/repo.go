@@ -72,10 +72,19 @@ func parsePkgInfo(info string) PkgInfo {
 func ReadRepo(path string) ([]PkgInfo, error) {
 	packages := make([]PkgInfo, 0)
 
-	file, err := os.Open(path + "/" + REPO_DB_FILE)
+	repo_path := path + "/" + REPO_DB_FILE
+
+	file, err := os.Open(repo_path)
 
 	if err != nil {
-		return packages, err
+		out, err := exec.Command("repo-add", repo_path).CombinedOutput()
+
+		log.Println(string(out))
+
+		if err != nil {
+			return packages, err
+		}
+
 	}
 
 	tr := tar.NewReader(file)
