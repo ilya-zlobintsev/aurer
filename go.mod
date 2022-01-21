@@ -9,6 +9,8 @@ require (
 	github.com/gorilla/mux v1.8.0
 )
 
+require github.com/gorilla/websocket v1.4.2
+
 require (
 	github.com/Jguer/go-alpm/v2 v2.0.6
 	github.com/Microsoft/go-winio v0.5.0 // indirect

@@ -21,12 +21,19 @@ import (
 	"github.com/ilyazzz/aurer/internal/repo"
 )
 
+type StatusMsg struct {
+	Status   []string
+	Workers  []Worker
+	Packages []repo.PkgInfo
+}
+
 type Controller struct {
-	docker    *client.Client
-	workers   []Worker
-	aurClient *aur.Client
-	RepoDir   string
-	status    []string
+	docker      *client.Client
+	workers     []Worker
+	aurClient   *aur.Client
+	RepoDir     string
+	status      []string
+	StatusChans []chan StatusMsg
 }
 
 func isDocker() bool {
@@ -64,17 +71,18 @@ func CreateController(docker *client.Client) Controller {
 	log.Printf("Serving repo from %v", repoDir)
 
 	return Controller{
-		docker:    docker,
-		workers:   make([]Worker, 0),
-		aurClient: aurClient,
-		RepoDir:   repoDir,
-		status:    make([]string, 0),
+		docker:      docker,
+		workers:     make([]Worker, 0),
+		aurClient:   aurClient,
+		RepoDir:     repoDir,
+		status:      make([]string, 0),
+		StatusChans: make([]chan StatusMsg, 0),
 	}
 }
 
 func (c *Controller) addStatus(status string) {
-	// TODO send the status change event over a channel
 	c.status = append(c.status, status)
+	go c.updateStatus()
 }
 
 func (c *Controller) removeStatus(status string) {
@@ -83,12 +91,31 @@ func (c *Controller) removeStatus(status string) {
 			c.status[i] = c.status[len(c.status)-1]
 
 			c.status = c.status[:len(c.status)-1]
+
+			break
 		}
+	}
+
+	go c.updateStatus()
+}
+
+func (c *Controller) updateStatus() {
+	for _, ch := range c.StatusChans {
+		ch <- c.GetStatus()
 	}
 }
 
-func (c *Controller) GetStatus() []string {
-	return c.status
+func (c *Controller) GetStatus() StatusMsg {
+	repo, err := repo.ReadRepo(c.RepoDir)
+
+	if err != nil {
+		log.Printf("Failed to read repo: %v", repo)
+	}
+	return StatusMsg{
+		Status:   c.status,
+		Workers:  c.workers,
+		Packages: repo,
+	}
 }
 
 const DEFAULT_WORKER_IMAGE = "ghcr.io/ilyazzz/aurer-worker"
@@ -154,6 +181,8 @@ func (c *Controller) CreateWorker(pkgname string, outdir string) (Worker, error)
 
 	c.workers = append(c.workers, worker)
 
+	go c.updateStatus()
+
 	log.Printf("Created worker with container ID %v", container.ID)
 
 	return worker, nil
@@ -175,6 +204,7 @@ func (c *Controller) RemoveWorker(worker Worker) error {
 			c.workers = c.workers[:len(c.workers)-1]
 		}
 	}
+	go c.updateStatus()
 
 	return err
 }
@@ -302,6 +332,8 @@ func (c *Controller) Update() error {
 	}
 
 	wg.Wait()
+
+	go c.updateStatus()
 
 	return nil
 }

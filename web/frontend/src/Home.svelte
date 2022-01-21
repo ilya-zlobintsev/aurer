@@ -3,15 +3,31 @@
 
     let workers = [];
     let packages = [];
-    let addingPackage = false;
     let serverStatus = "";
+
+    async function listenStatus() {
+        const socket = new WebSocket("ws://" + location.host + "/api/status");
+
+        socket.addEventListener("message", function (event) {
+            const msg = JSON.parse(event.data);
+            
+            workers = msg["Workers"];
+            packages = msg["Packages"];
+            
+            const statusList = msg["Status"];
+
+            if (statusList.length == 0) {
+                serverStatus = "Idle";
+            } else {
+                serverStatus = statusList.join(", ");
+            }
+        });
+    }
 
     async function addPackage() {
         const pkg = prompt("Enter AUR package name");
 
         if (pkg != "") {
-            addingPackage = true;
-
             const response = await fetch("/api/packages", {
                 method: "POST",
                 body: pkg,
@@ -20,52 +36,9 @@
             if (!response.ok) {
                 alert("Failed to add package: " + response.statusText);
             }
-
-            addingPackage = false;
         }
     }
 
-    async function getWorkers() {
-        const res = await fetch("/api/workers");
-
-        if (res.ok) {
-            const workersNew = await res.json();
-
-            if (workersNew.toString() != workers.toString()) {
-                workers = workersNew;
-
-                getPackages();
-            }
-        } else {
-            throw new Error(res.status);
-        }
-    }
-
-    async function getPackages() {
-        const res = await fetch("/api/packages");
-
-        if (res.ok) {
-            packages = await res.json();
-        } else {
-            throw new Error(res.status);
-        }
-    }
-
-    async function getStatus() {
-        const res = await fetch("/api/status");
-
-        if (res.ok) {
-            let statusList = await res.json();
-
-            if (statusList.length == 0) {
-                serverStatus = "Idle";
-            } else {
-                serverStatus = statusList.join(", ");
-            }
-        } else {
-            throw new Error(res.status);
-        }
-    }
 
     async function startUpdate() {
         await fetch("/api/update", {
@@ -84,12 +57,7 @@
         }
     }
 
-    getPackages();
-    getWorkers();
-    getStatus();
-
-    setInterval(getWorkers, 2000);
-    setInterval(getStatus, 1000);
+    listenStatus();
 
     let repoLink =
         window.location.protocol + "//" + window.location.host + "/repo";
@@ -136,13 +104,9 @@
                     </tr>
                 {/each}
             </table>
-            {#if addingPackage}
-                <p>Adding package...</p>
-            {:else}
-                <button id="addPackageButton" on:click={addPackage}>
-                    Add package
-                </button>
-            {/if}
+            <button id="addPackageButton" on:click={addPackage}>
+                Add package
+            </button>
         </div>
     </div>
     <div class="section">

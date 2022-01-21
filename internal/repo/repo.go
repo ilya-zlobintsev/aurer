@@ -70,7 +70,7 @@ func parsePkgInfo(info string) PkgInfo {
 }
 
 func ReadRepo(path string) ([]PkgInfo, error) {
-	var packages []PkgInfo
+	packages := make([]PkgInfo, 0)
 
 	file, err := os.Open(path + "/" + REPO_DB_FILE)
 

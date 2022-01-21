@@ -51,11 +51,6 @@ func (web *Web) getPackages(w http.ResponseWriter, r *http.Request) {
 
 	respondJson(w, packages)
 }
-
-func (web *Web) getStatus(w http.ResponseWriter, r *http.Request) {
-	respondJson(w, web.c.GetStatus())
-}
-
 func (web *Web) postPackage(w http.ResponseWriter, r *http.Request) {
 	pkgname, err := bodyStr(w, r)
 
