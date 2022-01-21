@@ -2,6 +2,8 @@ FROM docker.io/archlinux
 
 RUN pacman -Syu base-devel git --noprogressbar --noconfirm --needed
 
+RUN rm /var/cache/pacman/pkg/*
+
 RUN echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
 RUN echo -e '\
